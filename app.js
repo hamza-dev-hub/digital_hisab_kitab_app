@@ -19,10 +19,10 @@ const DICTIONARY = {
     navInvoice: 'رسید و بل (Invoice)',
     navReports: 'رپورٹس و منافع',
     navSettings: 'سیٹنگز و بیک اپ',
-    dashYouWillGet: 'آپ کو ملیں گے (وصولی)',
-    dashYouWillGive: 'آپ نے دینے ہیں (ادھار)',
-    dashTodayCash: 'آج کا کیش بیلنس (روزنامچہ)',
-    btnTxtAddCustomer: '+ نیا گاہک شامل کریں',
+    dashYouWillGet: 'آپ کو ملیں گے',
+    dashYouWillGive: 'آپ نے دینے ہیں',
+    dashTodayCash: 'کیش بیلنس',
+    btnTxtAddCustomer: 'نیا گاہک شامل کریں',
     btnTxtAddCashEntry: 'روزنامچہ اندراج',
     btnTxtNewBill: 'نیا بل بنائیں',
     btnTxtAddStock: 'سامان شامل کریں',
@@ -30,7 +30,7 @@ const DICTIONARY = {
     recentCashHeader: 'آج کا کیش اندراج',
     tabCustomers: 'گاہک کھاتہ (Customers)',
     tabSuppliers: 'سپلائر کھاتہ (Suppliers)',
-    btnAddParty: '+ نیا کھاتہ کھولیں',
+    btnAddParty: 'نیا کھاتہ کھولیں',
     backToKhata: 'پیچھے واپس جائیں',
     btnSendWhatsApp: 'واٹس ایپ پر تقاضہ بھیجیں',
     btnSendSMS: 'SMS بھیجیں',
@@ -51,10 +51,10 @@ const DICTIONARY = {
     navInvoice: 'Receipt & Bill',
     navReports: 'Reports & Munafa',
     navSettings: 'Settings & Backup',
-    dashYouWillGet: 'Aap Ko Milein Ge (Vasooli)',
-    dashYouWillGive: 'Aap Ne Dene Hain (Udhar)',
-    dashTodayCash: 'Aaj Ka Cash Balance',
-    btnTxtAddCustomer: '+ Naya Grahak Shamil Karein',
+    dashYouWillGet: 'Aap Ko Milein Ge',
+    dashYouWillGive: 'Aap Ne Dene Hain',
+    dashTodayCash: 'Cash Balance',
+    btnTxtAddCustomer: 'Naya Grahak Shamil Karein',
     btnTxtAddCashEntry: 'Roznamcha Entry',
     btnTxtNewBill: 'Naya Bill Banayein',
     btnTxtAddStock: 'Stock Item Shamil Karein',
@@ -62,7 +62,7 @@ const DICTIONARY = {
     recentCashHeader: 'Aaj Ka Cash Indraj',
     tabCustomers: 'Grahak Khata (Customers)',
     tabSuppliers: 'Supplier Khata (Suppliers)',
-    btnAddParty: '+ Naya Khata Kholein',
+    btnAddParty: 'Naya Khata Kholein',
     backToKhata: 'Wapas Jayein',
     btnSendWhatsApp: 'WhatsApp Par Reminder Bheinjein',
     btnSendSMS: 'SMS Bheinjein',
@@ -83,10 +83,10 @@ const DICTIONARY = {
     navInvoice: 'Invoices & Billing',
     navReports: 'Reports & P&L',
     navSettings: 'Settings & Cloud Backup',
-    dashYouWillGet: "You'll Get (Receivables)",
-    dashYouWillGive: "You'll Give (Payables)",
+    dashYouWillGet: "You'll Get",
+    dashYouWillGive: "You'll Give",
     dashTodayCash: "Today's Cash Balance",
-    btnTxtAddCustomer: '+ Add Customer',
+    btnTxtAddCustomer: 'Add Customer',
     btnTxtAddCashEntry: 'Add Cash Entry',
     btnTxtNewBill: 'Create Bill',
     btnTxtAddStock: 'Add Stock Item',
@@ -94,7 +94,7 @@ const DICTIONARY = {
     recentCashHeader: "Today's Cash Activity",
     tabCustomers: 'Customers Ledger',
     tabSuppliers: 'Suppliers Ledger',
-    btnAddParty: '+ Add New Account',
+    btnAddParty: 'Add New Account',
     backToKhata: 'Back to Ledger',
     btnSendWhatsApp: 'Send WhatsApp Reminder',
     btnSendSMS: 'Send SMS',
@@ -239,10 +239,11 @@ function uint8ArrayToB64(buffer) {
 }
 
 function bioSetRingState(state) {
-  const ring = document.getElementById('bioRing');
-  if (!ring) return;
-  ring.classList.remove('bio-scanning', 'bio-success', 'bio-error');
-  if (state) ring.classList.add(state);
+  const icon = document.getElementById('bioQuickIcon');
+  if (!icon) return;
+  icon.classList.remove('scanning', 'success');
+  if (state === 'scanning') icon.classList.add('scanning');
+  if (state === 'success')  icon.classList.add('success');
 }
 
 function bioSetStatus(msg, type = '') {
@@ -252,43 +253,46 @@ function bioSetStatus(msg, type = '') {
   el.className = 'bio-status-msg' + (type ? ' msg-' + type : '');
 }
 
-// ── initSecurity ──────────────────────────────────────────────────────────
+// ── initSecurity (WhatsApp / EasyPaisa Style) ──────────────────────────────
 function initSecurity() {
   const settings = window.dhkDB.getSettings();
   const lockOverlay = document.getElementById('pinLockScreen');
   if (settings.pinEnabled !== false) {
     lockOverlay.classList.add('active');
+    // Auto-trigger native fingerprint scanner immediately on start
+    initBiometricUI(true);
   } else {
     lockOverlay.classList.remove('active');
   }
-  // Initialise biometric UI asynchronously
-  initBiometricUI();
 }
 
-async function initBiometricUI() {
-  const supported  = await checkBiometricSupport();
-  const enrolled   = localStorage.getItem(BIO_KEY_ENROLLED) === 'true';
-  const dismissed  = localStorage.getItem(BIO_KEY_DISMISSED) === 'true';
-  const keyBtn     = document.getElementById('biometricKeyBtn');
-  const unlockArea = document.getElementById('bioUnlockArea');
+let _isBioPrompting = false;
+
+async function initBiometricUI(autoTrigger = true) {
+  const supported = await checkBiometricSupport();
+  const keyBtn    = document.getElementById('biometricKeyBtn');
+  const quickBar  = document.getElementById('bioQuickBar');
 
   if (!supported) {
-    // Hide / dim everything biometric
+    // Biometrics not available on this device
     if (keyBtn) keyBtn.classList.add('bio-unavailable');
+    if (quickBar) quickBar.style.display = 'none';
     return;
   }
 
-  // Browser supports biometrics — show key button fully
+  // Device supports Biometrics
   if (keyBtn) keyBtn.classList.remove('bio-unavailable');
+  if (quickBar) quickBar.style.display = 'flex';
 
-  if (enrolled) {
-    // Credential exists — show big fingerprint area and auto-trigger
-    if (unlockArea) unlockArea.style.display = 'flex';
-    bioSetStatus('اسکین کے لیے بٹن دبائیں', 'info');
-    // Auto-trigger after a short delay for smooth UX
-    setTimeout(triggerBiometricAuth, 600);
+  // Auto-trigger biometric prompt if lock screen is active and user hasn't typed PIN yet
+  if (autoTrigger) {
+    setTimeout(() => {
+      const lockOverlay = document.getElementById('pinLockScreen');
+      if (lockOverlay && lockOverlay.classList.contains('active') && state.enteredPin.length === 0) {
+        triggerBiometricAuth(true);
+      }
+    }, 400);
   }
-  // If not enrolled and not dismissed, we'll show banner AFTER correct PIN
 }
 
 // ── lockApp ───────────────────────────────────────────────────────────────
@@ -297,14 +301,13 @@ function lockApp() {
   updatePinDots();
   document.getElementById('pinErrorMsg').textContent = '';
   document.getElementById('pinLockScreen').classList.add('active');
-  // Reset bio UI
   bioSetRingState(null);
   bioSetStatus('');
-  // Re-check enrollment to show/hide big button
-  initBiometricUI();
+  // Auto-trigger biometrics on lock
+  initBiometricUI(true);
 }
 
-// ── PIN entry ─────────────────────────────────────────────────────────────
+// ── PIN entry (Always active as fallback) ───────────────────────────────────
 function enterPinDigit(digit) {
   if (state.enteredPin.length < 4) {
     state.enteredPin += digit;
@@ -334,23 +337,13 @@ function updatePinDots() {
   });
 }
 
-// ── verifyPin ─────────────────────────────────────────────────────────────
+// ── verifyPin (PIN fallback check) ─────────────────────────────────────────
 async function verifyPin() {
   const settings   = window.dhkDB.getSettings();
   const correctPin = settings.pin || '1234';
 
   if (state.enteredPin === correctPin) {
-    // Correct PIN — unlock app
     unlockApp();
-
-    // Show biometric enrollment offer (if supported, not yet enrolled, not dismissed)
-    const supported  = await checkBiometricSupport();
-    const enrolled   = localStorage.getItem(BIO_KEY_ENROLLED) === 'true';
-    const dismissed  = localStorage.getItem(BIO_KEY_DISMISSED) === 'true';
-    if (supported && !enrolled && !dismissed) {
-      const banner = document.getElementById('bioEnrollBanner');
-      if (banner) banner.style.display = 'flex';
-    }
   } else {
     document.getElementById('pinErrorMsg').textContent = 'غلط پن کوڈ! دوبارہ کوشش کریں (ڈیفالٹ: 1234)';
     state.enteredPin = '';
@@ -358,14 +351,13 @@ async function verifyPin() {
   }
 }
 
-// ── unlockApp (shared helper) ─────────────────────────────────────────────
+// ── unlockApp (Shared Unlock Handler) ─────────────────────────────────────
 function unlockApp() {
   document.getElementById('pinLockScreen').classList.remove('active');
   state.enteredPin = '';
   updatePinDots();
   document.getElementById('pinErrorMsg').textContent = '';
-  const banner = document.getElementById('bioEnrollBanner');
-  if (banner) banner.style.display = 'none';
+  bioSetStatus('');
   showToast('خوش آمدید! ایپ ان لاک ہو گئی۔', 'success');
 }
 
@@ -377,156 +369,122 @@ function skipPinDemo() {
   showToast('ڈیمو موڈ فعال!', 'success');
 }
 
-// ── BIOMETRIC REGISTRATION (WebAuthn Create) ──────────────────────────────
-async function registerBiometric() {
-  const yesBtn = document.getElementById('bioEnrollYes');
-  if (yesBtn) { yesBtn.textContent = '...'; yesBtn.disabled = true; }
-
-  try {
-    // Build a stable user ID from the app's data
-    const userId = new TextEncoder().encode('dhk-user-001');
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
-
-    const credential = await navigator.credentials.create({
-      publicKey: {
-        challenge,
-        rp: {
-          name: 'Digital Hisab Kitab',
-          id: location.hostname || 'localhost'
-        },
-        user: {
-          id: userId,
-          name: 'dhk-user',
-          displayName: 'ڈیجیٹل حساب کتاب صارف'
-        },
-        pubKeyCredParams: [
-          { alg: -7,  type: 'public-key' },   // ES256
-          { alg: -257, type: 'public-key' }   // RS256
-        ],
-        authenticatorSelection: {
-          authenticatorAttachment: 'platform',
-          userVerification: 'required',
-          requireResidentKey: false
-        },
-        timeout: 60000,
-        attestation: 'none'
-      }
-    });
-
-    // Save credential ID in localStorage
-    const credId = uint8ArrayToB64(credential.rawId);
-    localStorage.setItem(BIO_KEY_CRED_ID, credId);
-    localStorage.setItem(BIO_KEY_ENROLLED, 'true');
-
-    // Hide banner, show big fingerprint area on next lock
-    const banner = document.getElementById('bioEnrollBanner');
-    if (banner) banner.style.display = 'none';
-    const unlockArea = document.getElementById('bioUnlockArea');
-    if (unlockArea) unlockArea.style.display = 'none';
-
-    showToast('فنگر پرنٹ کامیابی سے رجسٹر ہو گیا! 🎉', 'success');
-  } catch (err) {
-    console.warn('[WebAuthn register]', err);
-    if (yesBtn) { yesBtn.textContent = 'ہاں'; yesBtn.disabled = false; }
-
-    let msg = 'رجسٹریشن ناکام — براہ کرم دوبارہ کوشش کریں';
-    if (err.name === 'NotAllowedError') msg = 'آپ نے اجازت نہیں دی';
-    if (err.name === 'NotSupportedError') msg = 'آپ کا آلہ فنگر پرنٹ سپورٹ نہیں کرتا';
-    showToast(msg, 'error');
-  }
-}
-
-// ── BIOMETRIC AUTHENTICATION (WebAuthn Get) ───────────────────────────────
-async function triggerBiometricAuth() {
+// ── BIOMETRIC AUTHENTICATION (EasyPaisa / WhatsApp Flow: No Prior Setup Needed)
+async function triggerBiometricAuth(isAuto = false) {
   const supported = await checkBiometricSupport();
   if (!supported) {
-    showToast('اس آلے پر بائیو میٹرک دستیاب نہیں', 'error');
+    if (!isAuto) showToast('اس آلے پر فنگر پرنٹ دستیاب نہیں', 'error');
     return;
   }
 
-  const enrolled = localStorage.getItem(BIO_KEY_ENROLLED) === 'true';
-  if (!enrolled) {
-    // Not enrolled yet — prompt user to enter PIN first to enroll
-    bioSetStatus('پہلے پن کوڈ سے لاگ ان کریں', 'info');
-    showToast('فنگر پرنٹ فعال کرنے کے لیے پہلے پن کوڈ استعمال کریں', 'success');
-    return;
-  }
+  if (_isBioPrompting) return;
+  _isBioPrompting = true;
 
-  // Start scanning animation
-  bioSetRingState('bio-scanning');
-  bioSetStatus('اسکین ہو رہا ہے...', 'info');
-  const mainLabel = document.getElementById('bioMainLabel');
-  if (mainLabel) mainLabel.textContent = 'اسکین ہو رہا ہے...';
+  bioSetRingState('scanning');
+  bioSetStatus('فنگر پرنٹ اسکین کریں...', 'info');
 
   try {
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
     const credIdB64 = localStorage.getItem(BIO_KEY_CRED_ID);
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
 
-    const getOptions = {
-      publicKey: {
-        challenge,
-        rpId: location.hostname || 'localhost',
-        userVerification: 'required',
-        timeout: 60000
-      }
-    };
+    let authenticated = false;
 
-    // If we have a saved credential ID, add it as allowed credential
     if (credIdB64) {
-      getOptions.publicKey.allowCredentials = [{
-        id: b64ToUint8Array(credIdB64),
-        type: 'public-key',
-        transports: ['internal']
-      }];
+      // 1. Try existing platform credential
+      try {
+        const getOptions = {
+          publicKey: {
+            challenge,
+            rpId: location.hostname || 'localhost',
+            allowCredentials: [{
+              id: b64ToUint8Array(credIdB64),
+              type: 'public-key',
+              transports: ['internal']
+            }],
+            userVerification: 'required',
+            timeout: 60000
+          }
+        };
+        const assertion = await navigator.credentials.get(getOptions);
+        if (assertion) authenticated = true;
+      } catch (getErr) {
+        if (getErr.name !== 'NotAllowedError' && getErr.name !== 'AbortError') {
+          // Credential might be stale; clear it so we create a fresh one below
+          localStorage.removeItem(BIO_KEY_CRED_ID);
+        } else {
+          throw getErr;
+        }
+      }
     }
 
-    const assertion = await navigator.credentials.get(getOptions);
+    if (!authenticated) {
+      // 2. Seamless On-the-Fly Registration: prompts native biometric sensor directly
+      const userId = new TextEncoder().encode('dhk-user-001');
+      const credential = await navigator.credentials.create({
+        publicKey: {
+          challenge,
+          rp: {
+            name: 'Digital Hisab Kitab',
+            id: location.hostname || 'localhost'
+          },
+          user: {
+            id: userId,
+            name: 'dhk-user',
+            displayName: 'ڈیجیٹل حساب کتاب'
+          },
+          pubKeyCredParams: [
+            { alg: -7,  type: 'public-key' },   // ES256
+            { alg: -257, type: 'public-key' }   // RS256
+          ],
+          authenticatorSelection: {
+            authenticatorAttachment: 'platform',
+            userVerification: 'required',
+            requireResidentKey: false
+          },
+          timeout: 60000,
+          attestation: 'none'
+        }
+      });
 
-    // ── Authentication successful ──
-    bioSetRingState('bio-success');
-    bioSetStatus('تصدیق ہو گئی! ✓', 'success');
-    if (mainLabel) mainLabel.textContent = 'کامیاب!';
+      if (credential) {
+        const newCredId = uint8ArrayToB64(credential.rawId);
+        localStorage.setItem(BIO_KEY_CRED_ID, newCredId);
+        localStorage.setItem(BIO_KEY_ENROLLED, 'true');
+        authenticated = true;
+      }
+    }
 
-    setTimeout(() => {
-      unlockApp();
-    }, 650);
+    if (authenticated) {
+      bioSetRingState('success');
+      bioSetStatus('تصدیق ہو گئی! ✓', 'success');
+      setTimeout(() => {
+        unlockApp();
+      }, 450);
+    }
 
   } catch (err) {
-    console.warn('[WebAuthn auth]', err);
-    bioSetRingState('bio-error');
+    console.log('[Biometrics]', err.name, err.message);
+    bioSetRingState(null);
 
-    let msg = 'فنگر پرنٹ تصدیق ناکام';
-    if (err.name === 'NotAllowedError')   msg = 'اسکین منسوخ یا ناکام — پن کوڈ استعمال کریں';
-    if (err.name === 'InvalidStateError') msg = 'اسناد مل نہیں رہیں — پن کوڈ استعمال کریں';
-    if (err.name === 'SecurityError')     msg = 'سیکیورٹی خامی — پن کوڈ استعمال کریں';
-
-    bioSetStatus(msg, 'error');
-    if (mainLabel) mainLabel.textContent = 'فنگر پرنٹ سے ان لاک کریں';
-
-    // Reset ring after 2 seconds
-    setTimeout(() => {
-      bioSetRingState(null);
-      bioSetStatus('دوبارہ کوشش کریں', 'info');
-    }, 2200);
+    // If user dismissed or cancelled the biometric prompt, fallback smoothly to PIN
+    if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
+      bioSetStatus('پن کوڈ درج کریں یا فنگر پرنٹ دوبارہ دبائیں', 'info');
+    } else {
+      bioSetStatus('دوبارہ کوشش کریں یا پن کوڈ درج کریں', 'info');
+    }
+  } finally {
+    _isBioPrompting = false;
   }
-}
-
-// ── dismissBioEnrollBanner ────────────────────────────────────────────────
-function dismissBioEnrollBanner() {
-  localStorage.setItem(BIO_KEY_DISMISSED, 'true');
-  const banner = document.getElementById('bioEnrollBanner');
-  if (banner) banner.style.display = 'none';
 }
 
 // ── removeBiometricEnrollment (available in Settings) ─────────────────────
 function removeBiometricEnrollment() {
   localStorage.removeItem(BIO_KEY_ENROLLED);
   localStorage.removeItem(BIO_KEY_CRED_ID);
-  localStorage.removeItem(BIO_KEY_DISMISSED);
-  showToast('فنگر پرنٹ ہٹا دیا گیا۔', 'success');
+  showToast('فنگر پرنٹ ڈیٹا ری سیٹ ہو گیا۔', 'success');
 }
 
-// Legacy stub — kept so any old inline calls don't break
+// Legacy stub
 function simulateBiometric() { triggerBiometricAuth(); }
 
 
